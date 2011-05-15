@@ -20,42 +20,88 @@ Since there are no required libraries or frameworks just add the script to your 
 Quickstart
 ==========
 
-Here is a complete example of how to use djstorm.js::
+Here is a complete example of how to use djstorm.js
 
-<script type="text/javascript" src="/js/djstorm.js"></script>
-<script type="text/javascript">
-	var Language = new Model({
-		Meta: {
-			dbTable: "languages"
-		},
+::
+
+	<script type="text/javascript" src="/js/djstorm.js"></script>
+	<script type="text/javascript">
 		
-		name: new CharField({ maxLength: 50 }),
-		shortcut: new CharField({ maxLength: 5, primaryKey: true, verboseName: "Abkürzung" }),
+		// please note: automatic creation of tables isn't supported yet. So for now you have to create tha approriate tables yourself.
 		
-		toString: function() {
-			return this.name;
+		// define the models
+		
+		var Language = new Model({
+			Meta: {
+				dbTable: "languages"
+			},
+			
+			name: new CharField({ maxLength: 50 }),
+			shortcut: new CharField({ maxLength: 5, primaryKey: true }),
+			
+			toString: function() {
+				return this.name;
+			}
+		});
+		
+		
+		var TYPE_CHOICES = [
+	        [1, "Book"],
+	        [2, "Brochure"],
+	        [3, "Flyer"]
+		];
+	
+		var Literature = new Model({
+			Meta: {
+				dbTable: "literature_types"
+			},
+			
+			title: new CharField(),
+			author: new CharField({ maxLength: 50 }),
+			orderId: new CharField({ maxLength: 10, primaryKey: true }),
+			type: new IntegerField({ choices: TYPE_CHOICES }),
+			languages: new ManyToManyField(Language, { relatedName: 'literatureTypes' }),
+
+			toString: function() {
+				return this.title + " by " + this.author;
+			}
+		});
+	
+	
+		// create instances
+		
+		var en = new Language({
+			name: "English",
+			shortcut: "en"
+		});
+		en.save();
+		var de = new Language({
+			name: "German",
+			shortcut: "de"
+		});
+		de.save();
+		
+		var book = new Literature({
+			title: "Alice's Adventures in Wonderland",
+			author: "Lewis Carroll",
+			orderId: 'AA',
+			type: 1,
+			languages: [en, de]
+		});
+		book.save();
+		
+		
+		// make queries
+		
+		function processLiterature(instances) {
+			for (var i = 0; i < instances.length; ++i) {
+				instance = instances[i];
+				instance.languages.set([en]);
+				instance.author = "Llorrac Siwel";
+				instance.save();
+				document.body.innerHTML += instances[i].toString();
+			}
 		}
-	});
-	
-	
-	var TYPE_CHOICES = [
-        [1, "Buch"],
-        [2, "Broschüre"],
-        [3, "CD"],
-        [4, "DVD"],
-        [5, "VHS"]
-	];
-
-	var LiteratureType = new Model({
-		Meta: {
-			dbTable: "literature_types"
-		},
 		
-		title: new CharField({ verboseName: 'Titel' }),
-		shortcut: new CharField({ maxLength: 6, verboseName: 'Abkürzung' }),
-		orderId: new CharField({ maxLength: 10, primaryKey: true, verboseName: 'Bestellnr' }),
-		type: new IntegerField({ choices: TYPE_CHOICES, verboseName: 'Typ' }),
-		languages: new ManyToManyField(Language, { relatedName: 'literatureTypes', verboseName: 'Sprachen' })
-	});
-
-</script> 
+		Literature.objects.filter({ author__exact: "Lewis Carroll" }).all(processLiterature);
+	</script> 
