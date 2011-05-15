@@ -22,14 +22,13 @@ Quickstart
 
 Here is a complete example of how to use djstorm.js
 
-::
+Include the script::
 
 	<script type="text/javascript" src="/js/djstorm.js"></script>
+	
+Define the models::
+
 	<script type="text/javascript">
-		
-		// please note: automatic creation of tables isn't supported yet. So for now you have to create tha approriate tables yourself.
-		
-		// define the models
 		
 		var Language = new Model({
 			Meta: {
@@ -66,9 +65,10 @@ Here is a complete example of how to use djstorm.js
 				return this.title + " by " + this.author;
 			}
 		});
-	
-	
-		// create instances
+		
+Please note: automatic creation of tables isn't supported yet. So for now you have to create tha approriate tables yourself.
+
+Now create some instances::
 		
 		var en = new Language({
 			name: "English",
@@ -89,9 +89,8 @@ Here is a complete example of how to use djstorm.js
 			languages: [en, de]
 		});
 		book.save();
-		
-		
-		// make queries
+
+Or make some queries::
 		
 		function processLiterature(instances) {
 			for (var i = 0; i < instances.length; ++i) {
