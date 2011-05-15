@@ -26,7 +26,7 @@ Include the script::
 
 	<script type="text/javascript" src="/js/djstorm.js"></script>
 	
-Define the models::
+Define the model::
 
 	<script type="text/javascript">
 		
@@ -43,6 +43,7 @@ Define the models::
 			}
 		});
 		
+And another one::
 		
 		var TYPE_CHOICES = [
 	        [1, "Book"],
