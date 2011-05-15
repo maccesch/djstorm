@@ -1,10 +1,16 @@
 /**
+ * @fileOverview Django like Object Relational Mapper for JavaScript
+ * @author maccesch
+ * @version 0.1
+ */
+
+/**
  * ModelManager constructor
  * @class Model Manager class that provides the actual database operations for models
  * @extends QuerySet
  * 
  * @param {Object} modelDef
- *            The model definition, i.e. fields
+ *            The model definition. See {@link Model}.
  */
 function ModelManager(modelDef) {
 	QuerySet.call(this, modelDef, this);
@@ -134,8 +140,10 @@ ModelManager.prototype._udpateManyToManyField = function(manyToManyField, modelI
 
 /**
  * SingleManager constructor
- * @class Proxy for a single model instance, that should be loaded lazily. Used for ForeignKeys.
+ * @class Proxy for a single model instance, that should be loaded lazily. Used for ForeignKeys. The actual instance is loaded when get() is called. 
  * @extends ModelManager
+ * @param {Object} modelDef Model definition of the base model. See {@link Model}.
+ * @param id The value of the primary key of the instance this object represents.
  */
 function SingleManager(modelDef, id) {
 	ModelManager.call(this, modelDef);
@@ -644,7 +652,7 @@ QuerySet.prototype._bindParameters = function(whereStr, values) {
  * Creates a lookup object. Used for complex lookups in QuerySet.filter() for
  * example.
  * 
- * @param queryObj {Object} lookups like in QuerySet.filter()
+ * @param {Object} queryObj lookups like in QuerySet.filter()
  * @example
  * // Returns all books that don't have the title "Hello" and/or have the author "John Doe"
  * Book.objects.filter(Q.not(Q({ title__exact: "Hello" })).or(Q({ author__exact: "John Doe" })));
@@ -927,7 +935,7 @@ ManyToManyField.prototype._createDefaultThrough = function(thisModel, fieldName)
  *      [3, "Flyer"]
  * ];
  * 
- * var LiteratureType = new Model({
+ * var Literature = new Model({
  * 	Meta: {
  * 		dbTable: "literature_types"
  * 	},
@@ -939,7 +947,7 @@ ManyToManyField.prototype._createDefaultThrough = function(thisModel, fieldName)
  * });
  * 
  * // use the model to create a new instance
- * var literatureType = new LiteratureType({
+ * var literature = new Literature({
  * 	title: "Alice's Adventures in Wonderland",
  *	author: "Lewis Carroll",
  *	orderId: 'AA',
@@ -1138,12 +1146,12 @@ Model._completeMetaInfo = function(modelDef) {
  * callback when saving is finished. It is passed the saved model instance.
  * @memberOf Model.prototype
  * @example
- * var LiteratureType = new Model({ ... });
+ * var Literature = new Model({ ... });
  * 
- * var literatureType = new LiteratureType({ ... });
+ * var literature = new Literature({ ... });
  * 
  * // save to database
- * literatureType.save();
+ * literature.save();
  */
 Model._save = function(onComplete) {
 	var validationValue = this.validate();
