@@ -654,8 +654,8 @@ QuerySet.prototype._bindParameters = function(whereStr, values) {
  * 
  * @param {Object} queryObj lookups like in QuerySet.filter()
  * @example
- * // Returns all books that don't have the title "Hello" and/or have the author "John Doe"
- * Book.objects.filter(Q.not(Q({ title__exact: "Hello" })).or(Q({ author__exact: "John Doe" })));
+ * 	// Returns all books that don't have the title "Hello" and/or have the author "John Doe"
+ * 	Book.objects.filter(Q.not(Q({ title__exact: "Hello" })).or(Q({ author__exact: "John Doe" })));
  */
 function Q(queryObj) {
 	var values = [];
@@ -706,7 +706,7 @@ Q.not = function(op) {
  * @param {Boolean} params.primaryKey This field is the primary key.
  * @param {Boolean} params.unique This field is unique.
  * @param {Boolean} params.null This field can be null.
- * @param {Boolean} params.choices: Array of [dbValue, displayValue] This field can hold exclusively values from choices.
+ * @param {Boolean} params.choices Array of [dbValue, displayValue] This field can hold exclusively values from choices.
  * @see Model
  */
 function Field(params) {
@@ -922,12 +922,11 @@ ManyToManyField.prototype._createDefaultThrough = function(thisModel, fieldName)
 
 /**
  * Meta Model constructor
- * @class Meta Model Class.
+ * @class Meta Model Class. Used to define database models in an object-oriented way.
  * @param {Object} modelDef The model definition, that is, field definitions and meta data
- * @returns {Function} Model constructor
+ * @returns {Function} Model instance constructor
  * @see Field
  * @example
- * 
  * // define a model
  * var TYPE_CHOICES = [
  *      [1, "Book"],
@@ -936,22 +935,22 @@ ManyToManyField.prototype._createDefaultThrough = function(thisModel, fieldName)
  * ];
  * 
  * var Literature = new Model({
- * 	Meta: {
- * 		dbTable: "literature_types"
- * 	},
- *
- *	title: new CharField(),
- *	author: new CharField({ maxLength: 50 }),
- *	orderId: new CharField({ maxLength: 10, primaryKey: true }),
- *	type: new IntegerField({ choices: TYPE_CHOICES })
+ *     Meta: {
+ *         dbTable: "literature_types"
+ *     },
+ * 
+ *     title: new CharField(),
+ *     author: new CharField({ maxLength: 50 }),
+ *     orderId: new CharField({ maxLength: 10, primaryKey: true }),
+ *     type: new IntegerField({ choices: TYPE_CHOICES })
  * });
  * 
  * // use the model to create a new instance
  * var literature = new Literature({
- * 	title: "Alice's Adventures in Wonderland",
- *	author: "Lewis Carroll",
- *	orderId: 'AA',
- *	type: 1
+ *     title: "Alice's Adventures in Wonderland",
+ *     author: "Lewis Carroll",
+ *     orderId: 'AA',
+ *     type: 1
  * });
  */
 function Model(modelDef) {
@@ -979,6 +978,7 @@ function Model(modelDef) {
 	
 	/**
 	 * The default model manager to be used for querys
+	 * @static
 	 * @type ModelManager
 	 * @name objects
 	 * @memberOf Model
@@ -1142,8 +1142,7 @@ Model._completeMetaInfo = function(modelDef) {
  * Save method that every model instance has.
  * @name save
  * @function
- * @param {Function} onComplete
- * callback when saving is finished. It is passed the saved model instance.
+ * @param {Function} onComplete Callback when saving is finished. It is passed the saved model instance.
  * @memberOf Model.prototype
  * @example
  * var Literature = new Model({ ... });
