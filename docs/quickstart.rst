@@ -12,7 +12,9 @@ Include the script:
     
     <script type="text/javascript">
     
-Define the model::
+Define the model:
+
+.. code-block:: javascript
 
     var Language = new Model({
         Meta: {
@@ -27,7 +29,9 @@ Define the model::
         }
     });
         
-And another one::
+And another one:
+
+.. code-block:: javascript
         
     var TYPE_CHOICES = [
         [1, "Book"],
@@ -54,7 +58,9 @@ And another one::
 .. NOTE::
 	Automatic creation of tables isn't supported yet. So for now you have to create the appropriate tables yourself.
 
-Now create some instances::
+Now create some instances:
+
+.. code-block:: javascript
         
     var en = new Language({
         name: "English",
@@ -78,7 +84,9 @@ Now create some instances::
     });
     book.save();
 
-Or make some queries::
+Or make some queries:
+
+.. code-block:: javascript
         
     Literature.objects.filter({ author__exact: "Lewis Carroll" }).all(processLiterature);
 
