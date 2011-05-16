@@ -17,8 +17,13 @@ Installation
 
 Since there are no required libraries or frameworks just add the script to your project.
 
-Quickstart
-==========
+Documentation
+=============
+
+For more information please visit http://readthedocs.org/docs/djstorm/en/latest/
+
+Example
+=======
 
 Here is a complete example of how to use djstorm.js
 
