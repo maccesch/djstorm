@@ -86,7 +86,7 @@ pygments_style = 'sphinx'
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
 
-highlight_language = 'js'
+highlight_language = 'javascript'
 
 
 # -- Options for HTML output ---------------------------------------------------
