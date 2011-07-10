@@ -36,8 +36,9 @@ ModelManager.prototype.save = function(modelInstance, onComplete) {
 		var fieldType = modelInstance._model[name];
 		if (fieldType instanceof Field) {
 			if (fieldType instanceof ManyToManyField) {
-				var m2mField = modelInstance[name];
-				additionalQueries += this._updateManyToManyField(m2mField, modelInstance);
+				if (!modelInstance._new) {
+					additionalQueries += this._updateManyToManyField(fieldType, modelInstance);
+				}
 			} else {
 				var value = modelInstance[name];
 				values.push(fieldType.toSql(value));
@@ -88,10 +89,31 @@ ModelManager.prototype._saveNew = function(tableName, primKey, modelInstance, co
 			tx.executeSql(query, [], function(tx, result) {
 				modelInstance._new = false;
 				modelInstance._old_id = modelInstance[primKey];
+
+				// make sure values in a ManyToManyField are written to the db
+				var saveablePlaceholders = [];
+				for (key in modelInstance) {
+					if (modelInstance[key] instanceof RelatedManagerPlaceholder) {
+						saveablePlaceholders.push([key, modelInstance[key]]);
+					}
+				}
+				function saveValuesFromPlaceholders(index) {
+					if (index < saveablePlaceholders.length) {
+						var sav = saveablePlaceholders[index];
+						var key = sav[0];
+						var relManager = modelInstance[key].getManager(modelInstance._model, modelInstance[primKey]);
+						modelInstance[key] = relManager;
+						sav[1].save(relManager, function() {
+							saveValuesFromPlaceholders(index+1);
+						});
+					} else {
+						onComplete(modelInstance);
+					}
+				}
+				saveValuesFromPlaceholders(0);
 				
 				Model.replacePlaceholders(modelInstance);
 				
-				onComplete(modelInstance);
 			});
 		});
 	}
@@ -114,7 +136,7 @@ ModelManager.prototype._saveNew = function(tableName, primKey, modelInstance, co
 /**
  * Saves the many to many field through its intermediate table
  */
-ModelManager.prototype._udpateManyToManyField = function(manyToManyField, modelInstance) {
+ModelManager.prototype._updateManyToManyField = function(manyToManyField, modelInstance) {
 	var primKey = this._model.Meta.primaryKey;
 	if (modelInstance._old_id == modelInstance[primKey]) {
 		return "";
@@ -171,8 +193,8 @@ SingleManager.prototype.get = function(callback) {
 }
 
 /**
- * Sets the instance
- * @param {Model} instance The instance this proxy reprents
+ * Sets the instance. Does not save anything to the database (call save() on the related model instance for that).
+ * @param {Model} instance The instance this proxy represents
  */
 SingleManager.prototype.set = function(instance) {
 	this._cache = instance;
@@ -184,7 +206,7 @@ SingleManager.prototype.set = function(instance) {
  * RelatedManager constructor
  * @class
  * Class that represents all instances of modelDef whose field named foreignKey has the value id.
- * Also used for the reverse relation of ForeignKey.
+ * Used for ManyToManyFields or the reverse relation of a ForeignKey.
  * @extends ModelManager
  * @param {Object} modelDef Model definition. See {@link Model}.
  * @param {Object} relModelDef Model definition of the related model.
@@ -201,6 +223,11 @@ function RelatedManager(modelDef, relModelDef, foreignKey, id, joinModelDef) {
 	var table;
 	var col;
 	if (joinModelDef) {
+		this._joinModelDef = joinModelDef;
+		this._relModelDef = relModelDef;
+		this._foreignKey = foreignKey;
+		this._id = id;
+		
 		table = joinModelDef.Meta.dbTable;
 		col = joinModelDef[foreignKey]._params.dbColumn;
 	} else {
@@ -221,6 +248,7 @@ function RelatedManager(modelDef, relModelDef, foreignKey, id, joinModelDef) {
 				break;
 			}
 		}
+		this._joinForeignKey = joinForeignKey;
 		
 		this._additionalTables.push(table);
 		this._where = '(' + this._where + ' AND "' + table + '"."' + joinModelDef[joinForeignKey]._params.dbColumn + '"="' + 
@@ -231,14 +259,125 @@ function RelatedManager(modelDef, relModelDef, foreignKey, id, joinModelDef) {
 RelatedManager.prototype = new ModelManager();
 
 /**
- * A placeholder for RelatedManager. This is replaces by an actual manager
+ * Sets the instances and saves the relation to the database. Only works for ManyToManyFields.
+ * @param {Array} instances List of instances this manager represents.
+ * @param {Function} doneCallback Callback function for when it's done. Takes instances as argument.
+ */
+RelatedManager.prototype.set = function(instances, doneCallback) {
+	if (!this._joinModelDef) {
+		throw "Method set() cannot be called on a RelatedManager instance that doesn't represent a ManyToManyField";
+	}
+
+	console.log('joinModelDef: ' + this._joinModelDef.Meta.dbTable + '\n' +
+			'relModelDef: ' + this._relModelDef.Meta.dbTable + '\n' +
+			'foreignKey: ' + this._foreignKey + '\n' +
+			'id: ' + this._id);
+
+	delete this._cache;
+	
+	var self = this;
+	this.clear(function() {
+		if (instances.length == 0) {
+			doneCallback();
+			return;
+		}
+		
+		var table = self._joinModelDef.Meta.dbTable;
+		var col = self._joinModelDef[self._foreignKey]._params.dbColumn;
+		
+		var baseQuery = 'INSERT INTO ' + table + ' (' +
+				col + ', ' + self._joinModelDef[self._joinForeignKey]._params.dbColumn + 
+				') VALUES (' + self._relModelDef[self._relModelDef.Meta.primaryKey].toSql(self._id) + ', ';
+		var primKey = self._model.Meta.primaryKey;
+		
+		var query = "";
+
+		function doInsertQuery(index) {
+			query = baseQuery + self._model[primKey].toSql(instances[index][primKey]) + ')';
+	
+			db.transaction(function (tx) {
+				tx.executeSql(query, [], function(tx, result) {
+					if (index == instances.length-1) {
+						if (doneCallback) {
+							self._cache = instances.slice(0);
+							doneCallback();
+						}
+					} else {
+						doInsertQuery(index+1);
+					}
+				});
+			});
+		}
+		doInsertQuery(0);
+		
+	});
+}
+
+/**
+ * Clears all currently represented relation data from the database. Only works for ManyToManyFields.
+ * @param {Function} doneCallback Callback function for when it's done. Takes no arguments.
+ */
+RelatedManager.prototype.clear = function(doneCallback) {
+	if (!this._joinModelDef) {
+		throw "Method clear() cannot be called on a RelatedManager instance that doesn't represent a ManyToManyField";
+	}
+	var table = this._joinModelDef.Meta.dbTable;
+	var col = this._joinModelDef[this._foreignKey]._params.dbColumn;
+	
+	var query = 'DELETE FROM ' + table +
+			' WHERE "' + col + '"=' +
+			this._relModelDef[this._relModelDef.Meta.primaryKey].toSql(this._id);
+	
+	db.transaction(function (tx) {
+		tx.executeSql(query, [], function(tx, result) {
+			if (doneCallback) {
+				doneCallback();
+			}
+		});
+	});
+}
+
+
+/**
+ * A placeholder for RelatedManager. This is replaced by an actual manager
  * when an instance of the model is created.
+ * @see RelatedManager
  * @returns {RelatedManagerPlaceholder}
  */
-function RelatedManagerPlaceholder(modelDef, foreignKey, joinModelDef) {
-	this._modelDef = modelDef;
+function RelatedManagerPlaceholder(modelDef, foreignKey, joinModelDef, initInstances) {
+	this._model = modelDef;
 	this._foreignKey = foreignKey;
 	this._joinModelDef = joinModelDef;
+	if (initInstances) {
+		this._cache = initInstances.slice(0);
+	} else {
+		this._cache = [];
+	}
+}
+
+/**
+ * Same as RelatedManager.all
+ */
+RelatedManagerPlaceholder.prototype.all = function(callback) {
+	callback(this._cache.slice(0));
+}
+
+/**
+ * Same as RelatedManager.set
+ */
+RelatedManagerPlaceholder.prototype.set = function(instances, doneCallback) {
+	this._cache = instances.slice(0);
+	doneCallback();
+}
+
+/**
+ * Saves the instances to the database through the actual manager.
+ * @param {RelatedManager} relatedManager The actual manager this placeholders represented
+ * @param {Function} callback Called when saving is done. Takes an array of the instances as argument.
+ * @see RelatedManager.set
+ */
+RelatedManagerPlaceholder.prototype.save = function(relatedManager, callback) {
+	relatedManager.set(this._cache, callback);
 }
 
 /**
@@ -247,7 +386,7 @@ function RelatedManagerPlaceholder(modelDef, foreignKey, joinModelDef) {
  * @param id Value of the primary key that the concerned instances reference to.
  */
 RelatedManagerPlaceholder.prototype.getManager = function(relModelDef, id) {
-	return new RelatedManager(this._modelDef, relModelDef, this._foreignKey, id, this._joinModelDef);
+	return new RelatedManager(this._model, relModelDef, this._foreignKey, id, this._joinModelDef);
 }
 
 
@@ -759,7 +898,8 @@ Field.prototype.validate = function(value) {
 }
 
 /**
- * Model field that represents a string.
+ * Constructor for CharField
+ * @class Model field that represents a string.
  * 
  * @param params
  *            {Object} maxLength: maximal length of string. defaults to 255.
@@ -815,6 +955,29 @@ IntegerField.prototype.toSql = function(value) {
 IntegerField.prototype.toJs = function(value, callback) {
 	callback(parseInt(value));
 }
+
+/**
+ * Constructor of BooleanField
+ * @class Model field that represents a boolean.
+ * 
+ * @param params
+ *            See Field
+ * @returns {BooleanField}
+ */
+function BooleanField(params) {
+	Field.call(this, params);
+}
+
+BooleanField.prototype = new Field();
+
+BooleanField.prototype.toSql = function(value) {
+	return value ? 1 : 0;
+}
+
+BooleanField.prototype.toJs = function(value, callback) {
+	callback(Boolean(value));
+}
+
 
 /**
  * Model field that represents a reference to another model.
@@ -889,19 +1052,26 @@ ManyToManyField.prototype.toSql = function(value) {
 ManyToManyField.prototype.toJs = function(value, callback) {
 	var interModel = this._params.through.objects._model;
 	
-	// find field of interModel that references the model where this field is in.
+	var foreignKey = ManyToManyField.getForeignKey(interModel, this._model);
+	
+	callback(new RelatedManagerPlaceholder(this._refModel.objects._model, foreignKey, interModel));
+}
+
+/**
+ * find field of interModel that references the thisModel.
+ */ 
+ManyToManyField.getForeignKey = function(interModel, thisModel) {
 	var foreignKey;
 	for (name in interModel) {
 		var type = interModel[name];
 		if (type instanceof ForeignKey) {
-			if (type._refModel.objects._model == this._model) {
+			if (type._refModel.objects._model == thisModel) {
 				foreignKey = name;
 				break;
 			}
 		}
 	}
-	
-	callback(new RelatedManagerPlaceholder(this._refModel.objects._model, foreignKey, interModel));
+	return foreignKey;
 }
 
 ManyToManyField.prototype._createDefaultThrough = function(thisModel, fieldName) {
@@ -917,6 +1087,13 @@ ManyToManyField.prototype._createDefaultThrough = function(thisModel, fieldName)
 	throughDef[refModelFkName] = new ForeignKey(this._refModel, { relatedName: '+' });
 	
 	return new Model(throughDef);
+}
+
+/**
+ * Returns the referenced model.
+ */
+ManyToManyField.prototype.getModel = function() {
+	return this._refModel;
 }
 
 
@@ -1004,7 +1181,12 @@ Model._initInstance = function(modelDef, modelManager, values) {
 		}
 	}
 
+	if (!values) {
+		values = {}
+	}
+	
 	// assign initial values
+	var name;
 	for (name in values) {
 		if (modelDef[name]) {
 			this[name] = values[name];
@@ -1020,8 +1202,12 @@ Model._initInstance = function(modelDef, modelManager, values) {
 			
 			var type = modelDef[name];
 			if (type instanceof Field) {
+				if (type.getModel && (!this[name] || !this[name].set)) {
+					Model.createPlaceholder(this, name, type, values[name]);
+				}
+				
 				// fill with default values
-				if (!this[name]) {
+				if (this[name] === undefined) {
 					this[name] = type._params['default'];
 					if (this[name] instanceof Function) {
 						this[name] = this[name]();
@@ -1114,6 +1300,27 @@ Model.replacePlaceholders = function(instance) {
 			instance[name] = type.getManager(instance._model, id);
 		}
 	}	
+}
+
+/**
+ * Create a placeholder for the instance for the given field and initialize it.
+ * @param {Model} instance The model instance
+ * @param {String} name Name of the field
+ * @param {Field} type Type of the field
+ * @param values Initial values for the placeholder
+ * @private
+ */
+Model.createPlaceholder = function(instance, name, type, values) {
+	if (type.getParams().through) {
+		// ManyToManyField
+		var interModel = type.getParams().through.objects._model;
+		var foreignKey = ManyToManyField.getForeignKey(interModel, instance._model);
+		
+		instance[name] = new RelatedManagerPlaceholder(type.getModel().objects._model, foreignKey, interModel, values);
+	} else {
+		// ForeignKey
+		//instance[name] = new SingleManagerPlaceholder(...);
+	}
 }
 
 /**

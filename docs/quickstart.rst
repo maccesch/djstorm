@@ -29,7 +29,7 @@ Define the model:
         }
     });
         
-And another one:
+And another more complex one:
 
 .. code-block:: javascript
         
