@@ -268,11 +268,6 @@ RelatedManager.prototype.set = function(instances, doneCallback) {
 		throw "Method set() cannot be called on a RelatedManager instance that doesn't represent a ManyToManyField";
 	}
 
-	console.log('joinModelDef: ' + this._joinModelDef.Meta.dbTable + '\n' +
-			'relModelDef: ' + this._relModelDef.Meta.dbTable + '\n' +
-			'foreignKey: ' + this._foreignKey + '\n' +
-			'id: ' + this._id);
-
 	delete this._cache;
 	
 	var self = this;
@@ -536,6 +531,8 @@ QuerySet.prototype._buildFrom = function() {
 QuerySet.prototype.delete = function(onComplete) {
 	this._cache = [];
 	var self = this;
+	// TODO : delete dependent objects and ManyToManyFields
+	
 	db.transaction(function (tx) {
 		var where = self._buildWhere();
 		var from = self._buildFrom();
